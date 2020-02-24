@@ -65,6 +65,24 @@
 /************************************************************************/
 /******/ ([
 /* 0 */
+/***/ (function(module, exports) {
+
+module.exports = require("stream");
+
+/***/ }),
+/* 1 */
+/***/ (function(module, exports) {
+
+module.exports = require("http");
+
+/***/ }),
+/* 2 */
+/***/ (function(module, exports) {
+
+module.exports = require("url");
+
+/***/ }),
+/* 3 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -73,26 +91,8 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Request", function() { return Request; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Response", function() { return Response; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "FetchError", function() { return FetchError; });
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_stream__ = __webpack_require__(1);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_stream___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_0_stream__);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1_http__ = __webpack_require__(2);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1_http___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_1_http__);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_url__ = __webpack_require__(3);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_url___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_2_url__);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3_https__ = __webpack_require__(4);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3_https___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_3_https__);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4_zlib__ = __webpack_require__(5);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4_zlib___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_4_zlib__);
-
-
-
-
-
-
 // Based on https://github.com/tmpvar/jsdom/blob/aa85b2abf07766ff7bf5c1f6daafb3726f2f2db5/lib/jsdom/living/blob.js
-
-// fix for "Readable" isn't a named export issue
-const Readable = __WEBPACK_IMPORTED_MODULE_0_stream___default.a.Readable;
+// (MIT licensed)
 
 const BUFFER = Symbol('buffer');
 const TYPE = Symbol('type');
@@ -105,7 +105,6 @@ class Blob {
 		const options = arguments[1];
 
 		const buffers = [];
-		let size = 0;
 
 		if (blobParts) {
 			const a = blobParts;
@@ -124,7 +123,6 @@ class Blob {
 				} else {
 					buffer = Buffer.from(typeof element === 'string' ? element : String(element));
 				}
-				size += buffer.length;
 				buffers.push(buffer);
 			}
 		}
@@ -141,24 +139,6 @@ class Blob {
 	}
 	get type() {
 		return this[TYPE];
-	}
-	text() {
-		return Promise.resolve(this[BUFFER].toString());
-	}
-	arrayBuffer() {
-		const buf = this[BUFFER];
-		const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-		return Promise.resolve(ab);
-	}
-	stream() {
-		const readable = new Readable();
-		readable._read = function () {};
-		readable.push(this[BUFFER]);
-		readable.push(null);
-		return readable;
-	}
-	toString() {
-		return '[object Blob]';
 	}
 	slice() {
 		const size = this.size;
@@ -236,15 +216,25 @@ FetchError.prototype = Object.create(Error.prototype);
 FetchError.prototype.constructor = FetchError;
 FetchError.prototype.name = 'FetchError';
 
+/**
+ * body.js
+ *
+ * Body interface provides common methods for Request and Response
+ */
+
+const Stream = __webpack_require__(0);
+
+var _require = __webpack_require__(0);
+
+const PassThrough = _require.PassThrough;
+
+
 let convert;
 try {
 	convert = __webpack_require__(!(function webpackMissingModule() { var e = new Error("Cannot find module \"encoding\""); e.code = 'MODULE_NOT_FOUND'; throw e; }())).convert;
 } catch (e) {}
 
 const INTERNALS = Symbol('Body internals');
-
-// fix an issue where "PassThrough" isn't a named export for node <10
-const PassThrough = __WEBPACK_IMPORTED_MODULE_0_stream___default.a.PassThrough;
 
 /**
  * Body mixin
@@ -268,19 +258,22 @@ function Body(body) {
 	if (body == null) {
 		// body is undefined or null
 		body = null;
+	} else if (typeof body === 'string') {
+		// body is string
 	} else if (isURLSearchParams(body)) {
 		// body is a URLSearchParams
-		body = Buffer.from(body.toString());
-	} else if (isBlob(body)) ; else if (Buffer.isBuffer(body)) ; else if (Object.prototype.toString.call(body) === '[object ArrayBuffer]') {
-		// body is ArrayBuffer
-		body = Buffer.from(body);
-	} else if (ArrayBuffer.isView(body)) {
-		// body is ArrayBufferView
-		body = Buffer.from(body.buffer, body.byteOffset, body.byteLength);
-	} else if (body instanceof __WEBPACK_IMPORTED_MODULE_0_stream___default.a) ; else {
+	} else if (body instanceof Blob) {
+		// body is blob
+	} else if (Buffer.isBuffer(body)) {
+		// body is buffer
+	} else if (Object.prototype.toString.call(body) === '[object ArrayBuffer]') {
+		// body is array buffer
+	} else if (body instanceof Stream) {
+		// body is stream
+	} else {
 		// none of the above
-		// coerce to string then buffer
-		body = Buffer.from(String(body));
+		// coerce to string
+		body = String(body);
 	}
 	this[INTERNALS] = {
 		body,
@@ -290,10 +283,9 @@ function Body(body) {
 	this.size = size;
 	this.timeout = timeout;
 
-	if (body instanceof __WEBPACK_IMPORTED_MODULE_0_stream___default.a) {
+	if (body instanceof Stream) {
 		body.on('error', function (err) {
-			const error = err.name === 'AbortError' ? err : new FetchError(`Invalid response body while trying to fetch ${_this.url}: ${err.message}`, 'system', err);
-			_this[INTERNALS].error = error;
+			_this[INTERNALS].error = new FetchError(`Invalid response body while trying to fetch ${_this.url}: ${err.message}`, 'system', err);
 		});
 	}
 }
@@ -386,6 +378,7 @@ Body.prototype = {
 			return convertBody(buffer, _this3.headers);
 		});
 	}
+
 };
 
 // In browsers, all properties are enumerable.
@@ -428,25 +421,33 @@ function consumeBody() {
 		return Body.Promise.reject(this[INTERNALS].error);
 	}
 
-	let body = this.body;
-
 	// body is null
-	if (body === null) {
+	if (this.body === null) {
 		return Body.Promise.resolve(Buffer.alloc(0));
 	}
 
+	// body is string
+	if (typeof this.body === 'string') {
+		return Body.Promise.resolve(Buffer.from(this.body));
+	}
+
 	// body is blob
-	if (isBlob(body)) {
-		body = body.stream();
+	if (this.body instanceof Blob) {
+		return Body.Promise.resolve(this.body[BUFFER]);
 	}
 
 	// body is buffer
-	if (Buffer.isBuffer(body)) {
-		return Body.Promise.resolve(body);
+	if (Buffer.isBuffer(this.body)) {
+		return Body.Promise.resolve(this.body);
+	}
+
+	// body is buffer
+	if (Object.prototype.toString.call(this.body) === '[object ArrayBuffer]') {
+		return Body.Promise.resolve(Buffer.from(this.body));
 	}
 
 	// istanbul ignore if: should never happen
-	if (!(body instanceof __WEBPACK_IMPORTED_MODULE_0_stream___default.a)) {
+	if (!(this.body instanceof Stream)) {
 		return Body.Promise.resolve(Buffer.alloc(0));
 	}
 
@@ -467,19 +468,12 @@ function consumeBody() {
 			}, _this4.timeout);
 		}
 
-		// handle stream errors
-		body.on('error', function (err) {
-			if (err.name === 'AbortError') {
-				// if the request was aborted, reject with this Error
-				abort = true;
-				reject(err);
-			} else {
-				// other errors, such as incorrect content-encoding
-				reject(new FetchError(`Invalid response body while trying to fetch ${_this4.url}: ${err.message}`, 'system', err));
-			}
+		// handle stream error, such as incorrect content-encoding
+		_this4.body.on('error', function (err) {
+			reject(new FetchError(`Invalid response body while trying to fetch ${_this4.url}: ${err.message}`, 'system', err));
 		});
 
-		body.on('data', function (chunk) {
+		_this4.body.on('data', function (chunk) {
 			if (abort || chunk === null) {
 				return;
 			}
@@ -494,7 +488,7 @@ function consumeBody() {
 			accum.push(chunk);
 		});
 
-		body.on('end', function () {
+		_this4.body.on('end', function () {
 			if (abort) {
 				return;
 			}
@@ -502,7 +496,7 @@ function consumeBody() {
 			clearTimeout(resTimeout);
 
 			try {
-				resolve(Buffer.concat(accum, accumBytes));
+				resolve(Buffer.concat(accum));
 			} catch (err) {
 				// handle streams that have accumulated too much data (issue #414)
 				reject(new FetchError(`Could not create Buffer from response body for ${_this4.url}: ${err.message}`, 'system', err));
@@ -588,15 +582,6 @@ function isURLSearchParams(obj) {
 }
 
 /**
- * Check if `obj` is a W3C `Blob` object (which `File` inherits from)
- * @param  {*} obj
- * @return {boolean}
- */
-function isBlob(obj) {
-	return typeof obj === 'object' && typeof obj.arrayBuffer === 'function' && typeof obj.type === 'string' && typeof obj.stream === 'function' && typeof obj.constructor === 'function' && typeof obj.constructor.name === 'string' && /^(Blob|File)$/.test(obj.constructor.name) && /^(Blob|File)$/.test(obj[Symbol.toStringTag]);
-}
-
-/**
  * Clone body given Res/Req instance
  *
  * @param   Mixed  instance  Response or Request instance
@@ -613,7 +598,7 @@ function clone(instance) {
 
 	// check that body is a stream and not form-data object
 	// note: we can't clone the form-data object without having it as a dependency
-	if (body instanceof __WEBPACK_IMPORTED_MODULE_0_stream___default.a && typeof body.getBoundary !== 'function') {
+	if (body instanceof Stream && typeof body.getBoundary !== 'function') {
 		// tee instance body
 		p1 = new PassThrough();
 		p2 = new PassThrough();
@@ -634,9 +619,14 @@ function clone(instance) {
  *
  * This function assumes that instance.body is present.
  *
- * @param   Mixed  instance  Any options.body input
+ * @param   Mixed  instance  Response or Request instance
  */
-function extractContentType(body) {
+function extractContentType(instance) {
+	const body = instance.body;
+
+	// istanbul ignore if: Currently, because of a guard in Request, body
+	// can never be null. Included here for completeness.
+
 	if (body === null) {
 		// body is null
 		return null;
@@ -646,28 +636,22 @@ function extractContentType(body) {
 	} else if (isURLSearchParams(body)) {
 		// body is a URLSearchParams
 		return 'application/x-www-form-urlencoded;charset=UTF-8';
-	} else if (isBlob(body)) {
+	} else if (body instanceof Blob) {
 		// body is blob
 		return body.type || null;
 	} else if (Buffer.isBuffer(body)) {
 		// body is buffer
 		return null;
 	} else if (Object.prototype.toString.call(body) === '[object ArrayBuffer]') {
-		// body is ArrayBuffer
-		return null;
-	} else if (ArrayBuffer.isView(body)) {
-		// body is ArrayBufferView
+		// body is array buffer
 		return null;
 	} else if (typeof body.getBoundary === 'function') {
 		// detect form data input from form-data module
 		return `multipart/form-data;boundary=${body.getBoundary()}`;
-	} else if (body instanceof __WEBPACK_IMPORTED_MODULE_0_stream___default.a) {
+	} else {
 		// body is stream
 		// can't really do much about this
 		return null;
-	} else {
-		// Body constructor defaults other things to string
-		return 'text/plain;charset=UTF-8';
 	}
 }
 
@@ -683,15 +667,26 @@ function extractContentType(body) {
 function getTotalBytes(instance) {
 	const body = instance.body;
 
+	// istanbul ignore if: included for completion
 
 	if (body === null) {
 		// body is null
 		return 0;
-	} else if (isBlob(body)) {
+	} else if (typeof body === 'string') {
+		// body is string
+		return Buffer.byteLength(body);
+	} else if (isURLSearchParams(body)) {
+		// body is URLSearchParams
+		return Buffer.byteLength(String(body));
+	} else if (body instanceof Blob) {
+		// body is blob
 		return body.size;
 	} else if (Buffer.isBuffer(body)) {
 		// body is buffer
 		return body.length;
+	} else if (Object.prototype.toString.call(body) === '[object ArrayBuffer]') {
+		// body is array buffer
+		return body.byteLength;
 	} else if (body && typeof body.getLengthSync === 'function') {
 		// detect form data input from form-data module
 		if (body._lengthRetrievers && body._lengthRetrievers.length == 0 || // 1.x
@@ -702,6 +697,7 @@ function getTotalBytes(instance) {
 		return null;
 	} else {
 		// body is stream
+		// can't really do much about this
 		return null;
 	}
 }
@@ -719,11 +715,25 @@ function writeToStream(dest, instance) {
 	if (body === null) {
 		// body is null
 		dest.end();
-	} else if (isBlob(body)) {
-		body.stream().pipe(dest);
+	} else if (typeof body === 'string') {
+		// body is string
+		dest.write(body);
+		dest.end();
+	} else if (isURLSearchParams(body)) {
+		// body is URLSearchParams
+		dest.write(Buffer.from(String(body)));
+		dest.end();
+	} else if (body instanceof Blob) {
+		// body is blob
+		dest.write(body[BUFFER]);
+		dest.end();
 	} else if (Buffer.isBuffer(body)) {
 		// body is buffer
 		dest.write(body);
+		dest.end();
+	} else if (Object.prototype.toString.call(body) === '[object ArrayBuffer]') {
+		// body is array buffer
+		dest.write(Buffer.from(body));
 		dest.end();
 	} else {
 		// body is stream
@@ -745,7 +755,7 @@ const invalidHeaderCharRegex = /[^\t\x20-\x7e\x80-\xff]/;
 
 function validateName(name) {
 	name = `${name}`;
-	if (invalidTokenRegex.test(name) || name === '') {
+	if (invalidTokenRegex.test(name)) {
 		throw new TypeError(`${name} is not a legal HTTP header name`);
 	}
 }
@@ -803,7 +813,9 @@ class Headers {
 
 		// We don't worry about converting prop to ByteString here as append()
 		// will handle it.
-		if (init == null) ; else if (typeof init === 'object') {
+		if (init == null) {
+			// no op
+		} else if (typeof init === 'object') {
 			const method = init[Symbol.iterator];
 			if (method != null) {
 				if (typeof method !== 'function') {
@@ -1112,10 +1124,18 @@ function createHeadersLenient(obj) {
 	return headers;
 }
 
-const INTERNALS$1 = Symbol('Response internals');
+/**
+ * response.js
+ *
+ * Response class provides content decoding
+ */
 
-// fix an issue where "STATUS_CODES" aren't a named export for node <10
-const STATUS_CODES = __WEBPACK_IMPORTED_MODULE_1_http___default.a.STATUS_CODES;
+var _require$1 = __webpack_require__(1);
+
+const STATUS_CODES = _require$1.STATUS_CODES;
+
+
+const INTERNALS$1 = Symbol('Response internals');
 
 /**
  * Response class
@@ -1132,26 +1152,17 @@ class Response {
 		Body.call(this, body, opts);
 
 		const status = opts.status || 200;
-		const headers = new Headers(opts.headers);
-
-		if (body != null && !headers.has('Content-Type')) {
-			const contentType = extractContentType(body);
-			if (contentType) {
-				headers.append('Content-Type', contentType);
-			}
-		}
 
 		this[INTERNALS$1] = {
 			url: opts.url,
 			status,
 			statusText: opts.statusText || STATUS_CODES[status],
-			headers,
-			counter: opts.counter
+			headers: new Headers(opts.headers)
 		};
 	}
 
 	get url() {
-		return this[INTERNALS$1].url || '';
+		return this[INTERNALS$1].url;
 	}
 
 	get status() {
@@ -1163,10 +1174,6 @@ class Response {
   */
 	get ok() {
 		return this[INTERNALS$1].status >= 200 && this[INTERNALS$1].status < 300;
-	}
-
-	get redirected() {
-		return this[INTERNALS$1].counter > 0;
 	}
 
 	get statusText() {
@@ -1188,8 +1195,7 @@ class Response {
 			status: this.status,
 			statusText: this.statusText,
 			headers: this.headers,
-			ok: this.ok,
-			redirected: this.redirected
+			ok: this.ok
 		});
 	}
 }
@@ -1200,7 +1206,6 @@ Object.defineProperties(Response.prototype, {
 	url: { enumerable: true },
 	status: { enumerable: true },
 	ok: { enumerable: true },
-	redirected: { enumerable: true },
 	statusText: { enumerable: true },
 	headers: { enumerable: true },
 	clone: { enumerable: true }
@@ -1213,13 +1218,21 @@ Object.defineProperty(Response.prototype, Symbol.toStringTag, {
 	configurable: true
 });
 
+/**
+ * request.js
+ *
+ * Request class contains server only options
+ *
+ * All spec algorithm step numbers are based on https://fetch.spec.whatwg.org/commit-snapshots/ae716822cb3a61843226cd090eefc6589446c1d2/.
+ */
+
+var _require$2 = __webpack_require__(2);
+
+const format_url = _require$2.format;
+const parse_url = _require$2.parse;
+
+
 const INTERNALS$2 = Symbol('Request internals');
-
-// fix an issue where "format", "parse" aren't a named export for node <10
-const parse_url = __WEBPACK_IMPORTED_MODULE_2_url___default.a.parse;
-const format_url = __WEBPACK_IMPORTED_MODULE_2_url___default.a.format;
-
-const streamDestructionSupported = 'destroy' in __WEBPACK_IMPORTED_MODULE_0_stream___default.a.Readable.prototype;
 
 /**
  * Check if a value is an instance of Request.
@@ -1229,11 +1242,6 @@ const streamDestructionSupported = 'destroy' in __WEBPACK_IMPORTED_MODULE_0_stre
  */
 function isRequest(input) {
 	return typeof input === 'object' && typeof input[INTERNALS$2] === 'object';
-}
-
-function isAbortSignal(signal) {
-	const proto = signal && typeof signal === 'object' && Object.getPrototypeOf(signal);
-	return !!(proto && proto.constructor.name === 'AbortSignal');
 }
 
 /**
@@ -1281,26 +1289,18 @@ class Request {
 
 		const headers = new Headers(init.headers || input.headers || {});
 
-		if (inputBody != null && !headers.has('Content-Type')) {
-			const contentType = extractContentType(inputBody);
-			if (contentType) {
+		if (init.body != null) {
+			const contentType = extractContentType(this);
+			if (contentType !== null && !headers.has('Content-Type')) {
 				headers.append('Content-Type', contentType);
 			}
-		}
-
-		let signal = isRequest(input) ? input.signal : null;
-		if ('signal' in init) signal = init.signal;
-
-		if (signal != null && !isAbortSignal(signal)) {
-			throw new TypeError('Expected signal to be an instanceof AbortSignal');
 		}
 
 		this[INTERNALS$2] = {
 			method,
 			redirect: init.redirect || input.redirect || 'follow',
 			headers,
-			parsedURL,
-			signal
+			parsedURL
 		};
 
 		// node-fetch-only options
@@ -1324,10 +1324,6 @@ class Request {
 
 	get redirect() {
 		return this[INTERNALS$2].redirect;
-	}
-
-	get signal() {
-		return this[INTERNALS$2].signal;
 	}
 
 	/**
@@ -1354,8 +1350,7 @@ Object.defineProperties(Request.prototype, {
 	url: { enumerable: true },
 	headers: { enumerable: true },
 	redirect: { enumerable: true },
-	clone: { enumerable: true },
-	signal: { enumerable: true }
+	clone: { enumerable: true }
 });
 
 /**
@@ -1382,10 +1377,6 @@ function getNodeRequestOptions(request) {
 		throw new TypeError('Only HTTP(S) protocols are supported');
 	}
 
-	if (request.signal && request.body instanceof __WEBPACK_IMPORTED_MODULE_0_stream___default.a.Readable && !streamDestructionSupported) {
-		throw new Error('Cancellation of streamed requests with AbortSignal is not supported in node < 8');
-	}
-
 	// HTTP-network-or-cache fetch steps 2.4-2.7
 	let contentLengthValue = null;
 	if (request.body == null && /^(POST|PUT)$/i.test(request.method)) {
@@ -1407,16 +1398,10 @@ function getNodeRequestOptions(request) {
 	}
 
 	// HTTP-network-or-cache fetch step 2.15
-	if (request.compress && !headers.has('Accept-Encoding')) {
+	if (request.compress) {
 		headers.set('Accept-Encoding', 'gzip,deflate');
 	}
-
-	let agent = request.agent;
-	if (typeof agent === 'function') {
-		agent = agent(parsedURL);
-	}
-
-	if (!headers.has('Connection') && !agent) {
+	if (!headers.has('Connection') && !request.agent) {
 		headers.set('Connection', 'close');
 	}
 
@@ -1426,39 +1411,30 @@ function getNodeRequestOptions(request) {
 	return Object.assign({}, parsedURL, {
 		method: request.method,
 		headers: exportNodeCompatibleHeaders(headers),
-		agent
+		agent: request.agent
 	});
 }
 
 /**
- * abort-error.js
+ * index.js
  *
- * AbortError interface for cancelled requests
+ * a request API compatible with window.fetch
+ *
+ * All spec algorithm step numbers are based on https://fetch.spec.whatwg.org/commit-snapshots/ae716822cb3a61843226cd090eefc6589446c1d2/.
  */
 
-/**
- * Create AbortError instance
- *
- * @param   String      message      Error message for human
- * @return  AbortError
- */
-function AbortError(message) {
-  Error.call(this, message);
+const http = __webpack_require__(1);
+const https = __webpack_require__(4);
 
-  this.type = 'aborted';
-  this.message = message;
+var _require$3 = __webpack_require__(0);
 
-  // hide custom error implementation details from end-users
-  Error.captureStackTrace(this, this.constructor);
-}
+const PassThrough$1 = _require$3.PassThrough;
 
-AbortError.prototype = Object.create(Error.prototype);
-AbortError.prototype.constructor = AbortError;
-AbortError.prototype.name = 'AbortError';
+var _require2 = __webpack_require__(2);
 
-// fix an issue where "PassThrough", "resolve" aren't a named export for node <10
-const PassThrough$1 = __WEBPACK_IMPORTED_MODULE_0_stream___default.a.PassThrough;
-const resolve_url = __WEBPACK_IMPORTED_MODULE_2_url___default.a.resolve;
+const resolve_url = _require2.resolve;
+
+const zlib = __webpack_require__(5);
 
 /**
  * Fetch function
@@ -1482,42 +1458,14 @@ function fetch(url, opts) {
 		const request = new Request(url, opts);
 		const options = getNodeRequestOptions(request);
 
-		const send = (options.protocol === 'https:' ? __WEBPACK_IMPORTED_MODULE_3_https___default.a : __WEBPACK_IMPORTED_MODULE_1_http___default.a).request;
-		const signal = request.signal;
-
-		let response = null;
-
-		const abort = function abort() {
-			let error = new AbortError('The user aborted a request.');
-			reject(error);
-			if (request.body && request.body instanceof __WEBPACK_IMPORTED_MODULE_0_stream___default.a.Readable) {
-				request.body.destroy(error);
-			}
-			if (!response || !response.body) return;
-			response.body.emit('error', error);
-		};
-
-		if (signal && signal.aborted) {
-			abort();
-			return;
-		}
-
-		const abortAndFinalize = function abortAndFinalize() {
-			abort();
-			finalize();
-		};
+		const send = (options.protocol === 'https:' ? https : http).request;
 
 		// send request
 		const req = send(options);
 		let reqTimeout;
 
-		if (signal) {
-			signal.addEventListener('abort', abortAndFinalize);
-		}
-
 		function finalize() {
 			req.abort();
-			if (signal) signal.removeEventListener('abort', abortAndFinalize);
 			clearTimeout(reqTimeout);
 		}
 
@@ -1557,13 +1505,7 @@ function fetch(url, opts) {
 					case 'manual':
 						// node-fetch-specific step: make manual redirect a bit easier to use by setting the Location header value to the resolved URL.
 						if (locationURL !== null) {
-							// handle corrupted header
-							try {
-								headers.set('Location', locationURL);
-							} catch (err) {
-								// istanbul ignore next: nodejs server prevent invalid response headers, we can't test this through normal request
-								reject(err);
-							}
+							headers.set('Location', locationURL);
 						}
 						break;
 					case 'follow':
@@ -1588,9 +1530,7 @@ function fetch(url, opts) {
 							agent: request.agent,
 							compress: request.compress,
 							method: request.method,
-							body: request.body,
-							signal: request.signal,
-							timeout: request.timeout
+							body: request.body
 						};
 
 						// HTTP-redirect fetch step 9
@@ -1615,19 +1555,14 @@ function fetch(url, opts) {
 			}
 
 			// prepare response
-			res.once('end', function () {
-				if (signal) signal.removeEventListener('abort', abortAndFinalize);
-			});
 			let body = res.pipe(new PassThrough$1());
-
 			const response_options = {
 				url: request.url,
 				status: res.statusCode,
 				statusText: res.statusMessage,
 				headers: headers,
 				size: request.size,
-				timeout: request.timeout,
-				counter: request.counter
+				timeout: request.timeout
 			};
 
 			// HTTP-network fetch step 12.1.1.3
@@ -1642,8 +1577,7 @@ function fetch(url, opts) {
 			// 4. no content response (204)
 			// 5. content not modified response (304)
 			if (!request.compress || request.method === 'HEAD' || codings === null || res.statusCode === 204 || res.statusCode === 304) {
-				response = new Response(body, response_options);
-				resolve(response);
+				resolve(new Response(body, response_options));
 				return;
 			}
 
@@ -1653,15 +1587,14 @@ function fetch(url, opts) {
 			// by common browsers.
 			// Always using Z_SYNC_FLUSH is what cURL does.
 			const zlibOptions = {
-				flush: __WEBPACK_IMPORTED_MODULE_4_zlib___default.a.Z_SYNC_FLUSH,
-				finishFlush: __WEBPACK_IMPORTED_MODULE_4_zlib___default.a.Z_SYNC_FLUSH
+				flush: zlib.Z_SYNC_FLUSH,
+				finishFlush: zlib.Z_SYNC_FLUSH
 			};
 
 			// for gzip
 			if (codings == 'gzip' || codings == 'x-gzip') {
-				body = body.pipe(__WEBPACK_IMPORTED_MODULE_4_zlib___default.a.createGunzip(zlibOptions));
-				response = new Response(body, response_options);
-				resolve(response);
+				body = body.pipe(zlib.createGunzip(zlibOptions));
+				resolve(new Response(body, response_options));
 				return;
 			}
 
@@ -1673,32 +1606,23 @@ function fetch(url, opts) {
 				raw.once('data', function (chunk) {
 					// see http://stackoverflow.com/questions/37519828
 					if ((chunk[0] & 0x0F) === 0x08) {
-						body = body.pipe(__WEBPACK_IMPORTED_MODULE_4_zlib___default.a.createInflate());
+						body = body.pipe(zlib.createInflate());
 					} else {
-						body = body.pipe(__WEBPACK_IMPORTED_MODULE_4_zlib___default.a.createInflateRaw());
+						body = body.pipe(zlib.createInflateRaw());
 					}
-					response = new Response(body, response_options);
-					resolve(response);
+					resolve(new Response(body, response_options));
 				});
 				return;
 			}
 
-			// for br
-			if (codings == 'br' && typeof __WEBPACK_IMPORTED_MODULE_4_zlib___default.a.createBrotliDecompress === 'function') {
-				body = body.pipe(__WEBPACK_IMPORTED_MODULE_4_zlib___default.a.createBrotliDecompress());
-				response = new Response(body, response_options);
-				resolve(response);
-				return;
-			}
-
 			// otherwise, use response as-is
-			response = new Response(body, response_options);
-			resolve(response);
+			resolve(new Response(body, response_options));
 		});
 
 		writeToStream(req, request);
 	});
 }
+
 /**
  * Redirect code matching
  *
@@ -1709,30 +1633,15 @@ fetch.isRedirect = function (code) {
 	return code === 301 || code === 302 || code === 303 || code === 307 || code === 308;
 };
 
+// Needed for TypeScript.
+fetch.default = fetch;
+
 // expose Promise
 fetch.Promise = global.Promise;
 
 /* harmony default export */ __webpack_exports__["default"] = (fetch);
 
 
-
-/***/ }),
-/* 1 */
-/***/ (function(module, exports) {
-
-module.exports = require("stream");
-
-/***/ }),
-/* 2 */
-/***/ (function(module, exports) {
-
-module.exports = require("http");
-
-/***/ }),
-/* 3 */
-/***/ (function(module, exports) {
-
-module.exports = require("url");
 
 /***/ }),
 /* 4 */
@@ -1769,7 +1678,7 @@ var _querystring = __webpack_require__(6);
 
 var _querystring2 = _interopRequireDefault(_querystring);
 
-var _nodeFetch = __webpack_require__(0);
+var _nodeFetch = __webpack_require__(3);
 
 var _nodeFetch2 = _interopRequireDefault(_nodeFetch);
 
